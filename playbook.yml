@@ -1,0 +1,103 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    node_version: "node_10.x"
+    ubuntu_distro: "bionic"
+
+  tasks: 
+    - name: Update and upgrade apt packages
+      apt: 
+        upgrade: yes
+        update-cache: yes
+    
+    - name: Install latest nginx version
+      apt: 
+        name: nginx 
+        state: latest
+    
+    - name: Start nginx
+      service:
+        name: nginx
+        state: started 
+
+    - name: Install node gpg key
+      apt_key:
+        url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
+        state: present
+
+    - name: Install the nodejs repos
+      apt_repository: 
+        repo: "deb https://deb.nodesource.com/node_10.x bionic main" 
+        state: present 
+        update_cache: yes
+    
+    - name: Install nodejs
+      apt:
+        name: nodejs
+        state: present
+    
+    - name: install yarn globally
+      npm:
+        name: yarn
+        global: yes
+    
+    - name: clone github repository
+      git:
+        repo: "https://github.com/andela/ah-frontend-zeus.git"
+        dest: "/home/ubuntu/ah-frontend-zeus"
+        clone: yes
+    
+    - name: install package dependencies
+      yarn:
+        path: /home/ubuntu/ah-frontend-zeus
+
+    - name: clean nginx doc root
+      file:
+        path: /var/www/html/index.nginx-debian.html
+        state: absent
+    
+    - name: yarn build and copy files created in dist folder to nginx doc root
+      shell:
+       cmd: |
+         cd /home/ubuntu/ah-frontend-zeus
+         sudo yarn build
+         sudo cp dist/* /var/www/html/.
+
+    - name: Restart nginx
+      shell:
+        cmd: |
+          sudo systemctl restart nginx
+
+    - name: create a systemd service to run the application in the background
+      file:
+        path: /etc/systemd/system/ah-frontend-zeus.service
+        state: touch
+
+    - name: edit the service file 
+      blockinfile:
+        dest: /etc/systemd/system/ah-frontend-zeus.service
+        block: |
+          [Unit]
+          Description=ah-frontend-zeus Service - Service to start Authors Haven application
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/bin/node /home/ubuntu/ah-frontend-zeus/server.js
+          Restart=on-failure
+          Type=simple
+          User=ubuntu
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Control application service with using systemctl...
+      shell:
+        cmd: |
+          sudo systemctl daemon-reload
+          sudo systemctl start ah-frontend-zeus.service
+          sudo systemctl enable ah-frontend-zeus.service
+  
+      

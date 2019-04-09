@@ -1,0 +1,6 @@
+terraform.tfvars
+AwsKey
+AwsKey.pub
+.terraform/
+terraform.tfstate.backup
+terraform.tfstate
